@@ -1,123 +1,196 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import { 
+  View, 
+  Text, 
+  FlatList, 
+  Image, 
+  TouchableOpacity, 
+  TextInput, 
+  Modal,
+  Pressable,
+  Keyboard
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../../constants/theme';
+import { ProductService, Product } from '../../database/productService';
+import { styles } from './style';
 
-// Données fictives basées sur ton image
-const DATA = [
-  { id: '1', title: 'Boisson 1', stock: '20', image: 'https://picsum.photos/200' },
-  { id: '2', title: 'Boisson 2', stock: '15', image: 'https://picsum.photos/201' },
-  { id: '3', title: 'Boisson 3', stock: '45', image: 'https://picsum.photos/202' },
-  { id: '4', title: 'Boisson 4', stock: '10', image: 'https://picsum.photos/203' },
-  { id: '5', title: 'Boisson 5', stock: '05', image: 'https://picsum.photos/204' },
-  { id: '6', title: 'Boisson 6', stock: '30', image: 'https://picsum.photos/205' },
-];
+// --- COMPOSANT : CARTE PRODUIT ---
+const ProductCard = React.memo(({ item, onPress, onLongPress }: { 
+  item: Product, 
+  onPress: (p: Product) => void, 
+  onLongPress: (p: Product) => void 
+}) => {
+  const ALERT_THRESHOLD = 20;
+  const isLowStock = item.stock_actuel <= ALERT_THRESHOLD;
 
-export default function ProductListScreen() {
-  
-  const renderProduct = ({ item }: any) => (
-    <View style={styles.card}>
-      <Image source={{ uri: item.image }} style={styles.image} />
+  return (
+    <Pressable 
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      onPress={() => onPress(item)}
+      onLongPress={() => onLongPress(item)}
+      delayLongPress={400}
+    >
+      <Image 
+        source={item.image_uri ? { uri: item.image_uri } : { uri: 'https://picsum.photos/seed/600/400' }} 
+        style={styles.image} 
+        resizeMode="cover"
+      />
       <View style={styles.infoContainer}>
-        <Text style={styles.productTitle}>{item.title}</Text>
+        <Text style={styles.productTitle} numberOfLines={1}>{item.name}</Text>
         <View style={styles.stockRow}>
-          <Text style={styles.stockText}>Stock: {item.stock}</Text>
-          <View style={styles.iconBadge}>
-             <Ionicons name="cube" size={14} color="#FFF" />
+          <View>
+            <Text style={styles.stockLabel}>Stock actuel</Text>
+            <Text style={[styles.stockValue, isLowStock ? { color: '#FF4444', fontWeight: 'bold' } : { color: '#00CED1' }]}>
+              {item.stock_actuel} 
+              {isLowStock && <Ionicons name="warning" size={14} color="#FF4444" style={{ marginLeft: 5 }} />}
+            </Text>
+          </View>
+          <View style={[styles.iconBadge, isLowStock ? { backgroundColor: '#FF4444' } : { backgroundColor: '#00CED1' }]}>
+             <Ionicons name={isLowStock ? "alert-circle" : "cube"} size={14} color="#FFF" />
           </View>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
+});
+
+// --- ÉCRAN PRINCIPAL ---
+export default function ProductListScreen() {
+  const router = useRouter();
+  
+  // États
+  const [products, setProducts] = useState<Product[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+
+  // Sync avec la DB
+  useFocusEffect(
+    useCallback(() => {
+      const data = ProductService.getAllProducts();
+      setProducts(data);
+    }, [])
+  );
+
+  // LOGIQUE DE FILTRAGE (Senior Approach)
+  // On calcule la liste filtrée sans modifier la liste originale
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery.trim()) return products;
+    
+    return products.filter((p) => 
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.type && p.type.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
+  }, [searchQuery, products]);
+
+  const handleManageStock = (product: Product) => {
+    Keyboard.dismiss(); // Fermer le clavier avant de naviguer
+    router.push({ pathname: "/manage_stock", params: { id: product.id } });
+  };
+
+  const handleDelete = () => {
+    if (selectedProduct) {
+      ProductService.deleteProduct(selectedProduct.id);
+      setProducts(prev => prev.filter(p => p.id !== selectedProduct.id));
+      setIsModalVisible(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
-      {/* Barre de recherche */}
-      <View style={styles.searchSection}>
+      {/* HEADER AVEC BARRE DE RECHERCHE FONCTIONNELLE */}
+      <View style={styles.headerContainer}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color="#00CED1" style={styles.searchIcon} />
+          <Ionicons name="search" size={20} color={Colors.primary} />
           <TextInput 
-            placeholder="Where are you going?" 
-            style={styles.searchInput}
+            placeholder="Rechercher un produit..." 
+            style={styles.searchInput} 
+            placeholderTextColor="#AAA"
+            value={searchQuery}
+            onChangeText={setSearchQuery} // Met à jour l'état de recherche
+            clearButtonMode="while-editing" // Standard iOS
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color="#CCC" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={styles.titleRow}>
+          <Text style={styles.mainTitle}>Mon Inventaire</Text>
+          <TouchableOpacity 
+            activeOpacity={0.7} 
+            style={styles.fab} 
+            onPress={() => router.push('/app_produit')}
+          >
+            <Ionicons name="add" size={35} color="#FFF" />
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Titre et Bouton Ajouter */}
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>List Produit</Text>
-        <TouchableOpacity style={styles.addButton}>
-          <Ionicons name="add" size={30} color="#FFF" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Grille de produits */}
+      {/* LISTE FILTRÉE */}
       <FlatList
-        data={DATA}
-        renderItem={renderProduct}
-        keyExtractor={item => item.id}
-        numColumns={2} // Pour faire la grille de 2 colonnes
-        columnWrapperStyle={styles.row}
-        contentContainerStyle={styles.listContainer}
+        data={filteredProducts}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={({ item }) => (
+          <ProductCard 
+            item={item} 
+            onPress={handleManageStock} 
+            onLongPress={(p) => { setSelectedProduct(p); setIsModalVisible(true); }} 
+          />
+        )}
+        numColumns={2}
+        columnWrapperStyle={styles.columnWrapper}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={{ marginTop: 100, alignItems: 'center' }}>
+            <Ionicons 
+              name={searchQuery ? "search-outline" : "cube-outline"} 
+              size={60} 
+              color="#CCC" 
+            />
+            <Text style={{ color: '#AAA', marginTop: 10 }}>
+              {searchQuery ? `Aucun résultat pour "${searchQuery}"` : "Aucun produit en stock"}
+            </Text>
+          </View>
+        }
       />
+
+      {/* MODAL D'OPTIONS */}
+      <Modal visible={isModalVisible} transparent animationType="slide">
+        <Pressable style={styles.modalOverlay} onPress={() => setIsModalVisible(false)}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>{selectedProduct?.name}</Text>
+            
+            <TouchableOpacity style={styles.optionButton} onPress={() => {
+              setIsModalVisible(false);
+              router.push({ pathname: "/app_produit", params: { id: selectedProduct?.id } });
+            }}>
+              <View style={[styles.optionIcon, { backgroundColor: '#E0F7FA' }]}>
+                <Ionicons name="create-outline" size={24} color="#00ACC1" />
+              </View>
+              <Text style={styles.optionText}>Modifier</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.optionButton} onPress={handleDelete}>
+              <View style={[styles.optionIcon, { backgroundColor: '#FFEBEE' }]}>
+                <Ionicons name="trash-outline" size={24} color="#FF5252" />
+              </View>
+              <Text style={[styles.optionText, { color: '#FF5252' }]}>Supprimer</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.cancelButton} onPress={() => setIsModalVisible(false)}>
+              <Text style={styles.cancelButtonText}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FA' },
-  searchSection: { paddingTop: 60, paddingHorizontal: 20 },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 25,
-    paddingHorizontal: 15,
-    height: 50,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-  },
-  searchIcon: { marginRight: 10 },
-  searchInput: { flex: 1, color: '#000' },
-  headerRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    padding: 20,
-    marginTop: 10 
-  },
-  title: { fontSize: 22, fontWeight: 'bold' },
-  addButton: {
-    backgroundColor: '#00CED1',
-    width: 70,
-    height: 45,
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 5,
-  },
-  listContainer: { paddingHorizontal: 10, paddingBottom: 100 },
-  row: { justifyContent: 'space-between' },
-  card: {
-    backgroundColor: '#FFF',
-    width: '47%',
-    borderRadius: 20,
-    marginBottom: 20,
-    overflow: 'hidden',
-    elevation: 3,
-    shadowOpacity: 0.1,
-  },
-  image: { width: '100%', height: 120 },
-  infoContainer: { padding: 10, backgroundColor: '#FFF5F5' },
-  productTitle: { color: '#800000', fontWeight: 'bold', fontSize: 16 },
-  stockRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 5 },
-  stockText: { fontWeight: '600' },
-  iconBadge: { 
-    backgroundColor: '#800000', 
-    padding: 4, 
-    borderRadius: 6 
-  }
-});

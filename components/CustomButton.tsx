@@ -1,37 +1,57 @@
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
+import React from 'react';
+import { TouchableOpacity, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
 import { Colors } from '../constants/theme';
 
-interface  CustomButtonProps {
-    title: string;
-    onPress: () => void;
-    outline?: boolean;
+interface CustomButtonProps {
+  title: string;
+  onPress: () => void;
+  disabled?: boolean;
+  outline?: boolean; // Ajout de la prop outline
+  style?: ViewStyle;
 }
 
-export const CustomButton = ({ title, onPress, outline = false }: CustomButtonProps) => (
-  <TouchableOpacity 
-    onPress={onPress} 
-    style={[styles.button, outline ? styles.outline : styles.filled]}
-  >
-    <Text style={[styles.text, { color: outline ? Colors.primary : '#FFF' }]}>
-      {title}
-    </Text>
-  </TouchableOpacity>
-);
+export const CustomButton = ({ title, onPress, disabled, outline, style }: CustomButtonProps) => {
+  return (
+    <TouchableOpacity 
+      style={[
+        styles.button, 
+        outline && styles.outlineButton, // Style bordure
+        style, 
+        disabled && styles.disabled
+      ]} 
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.8}
+    >
+      <Text style={[styles.text, outline && styles.outlineText]}>{title}</Text>
+    </TouchableOpacity>
+  );
+};
 
 const styles = StyleSheet.create({
   button: {
-    width: '100%',
-    height: 55,
-    borderRadius: 15, 
-    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    padding: 18,
+    borderRadius: 15,
     alignItems: 'center',
-    marginVertical: 10,
+    justifyContent: 'center',
+    marginVertical: 8,
   },
-  filled: { backgroundColor: Colors.primary },
-  outline: { 
-    backgroundColor: '#FFF', 
-    borderWidth: 2, 
-    borderColor: Colors.primary 
+  outlineButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: Colors.primary,
   },
-  text: { fontSize: 18, fontWeight: 'bold' }
+  disabled: {
+    backgroundColor: '#CCC',
+    borderColor: '#CCC',
+  },
+  text: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  outlineText: {
+    color: Colors.primary,
+  },
 });

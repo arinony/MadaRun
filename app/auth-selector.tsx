@@ -8,14 +8,12 @@ export default function AuthSelectorScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Logo MADA RUN */}
       <View style={styles.logoContainer}>
         <Text style={styles.logoText}>
           MADA <Text style={styles.logoHighlight}>RUN</Text>
         </Text>
       </View>
 
-      {/* Boutons d'action */}
       <View style={styles.buttonContainer}>
         <CustomButton 
           title="Se connecter" 
@@ -24,7 +22,7 @@ export default function AuthSelectorScreen() {
         
         <CustomButton 
           title="Créer un compte" 
-          outline={true} // C'est ici qu'il devient blanc avec bordure turquoise
+          outline={true} // Fonctionne grâce à la mise à jour du composant
           onPress={() => router.push('/register')} 
         />
       </View>
@@ -35,9 +33,9 @@ export default function AuthSelectorScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.Background,
+    backgroundColor: Colors.Background || '#F8F9FA',
     padding: 30,
-    justifyContent: 'space-around', // Aligne le logo en haut et boutons en bas
+    justifyContent: 'space-around',
   },
   logoContainer: {
     alignItems: 'center',
@@ -50,7 +48,7 @@ const styles = StyleSheet.create({
     color: '#000',
   },
   logoHighlight: {
-    color: '#E63946', // Le rouge pour le mot "RUN"
+    color: '#E63946',
   },
   buttonContainer: {
     width: '100%',
